@@ -57,6 +57,8 @@ from .global_vars import (
     get_num_microbatches,
     update_num_microbatches)
 
+import pypipeec
+import pypipeec.checkpoint
 
 stimer = StragglerDetector()
 
@@ -231,6 +233,13 @@ def pretrain(train_valid_test_dataset_provider,
     print_datetime('after model, optimizer, and learning rate '
                    'scheduler are built')
     config = get_model_config(model[0])
+
+    # * * * Checkpointing setup * * *
+    # TODO: Load config from json file
+    ckpt_file_name = f"checkpoint_{args.rank}"
+    pypipeec.checkpoint.save_cuda(ckpt_file_name, model, optimizer)
+    network_config = pypipeec.config.NetworkConfig(2, args.rank, 1, ['0.0.0.0:11431', '0.0.0.0:11432'])
+    pypipeec.checkpoint.init(ckpt_file_name, network_config)
 
     # Data stuff.
     timers('train/valid/test-data-iterators-setup', log_level=0).start(
@@ -1015,18 +1024,25 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
         # checkpoint should be saved. If the number of microbatches is different
         # from the previous iteration, save a checkpoint. Then run consistency check
         # to make sure training configuration is still valid.
-        update_num_microbatches(args.consumed_train_samples, consistency_check=False)
-        if get_num_microbatches() != num_microbatches and iteration != 0:
-            assert get_num_microbatches() > num_microbatches, \
-                "number of microbatches should be increasing due to batch size rampup"
-            save_checkpoint_and_time(iteration, model, optimizer,
-                                     opt_param_scheduler,
-                                     num_floating_point_operations_so_far,
-                                     checkpointing_context)
-        num_microbatches = get_num_microbatches()
-        update_num_microbatches(args.consumed_train_samples, consistency_check=True)
+        # * * * * * Disable this for now * * * * *
+        # update_num_microbatches(args.consumed_train_samples, consistency_check=False)
+        # if get_num_microbatches() != num_microbatches and iteration != 0:
+        #     assert get_num_microbatches() > num_microbatches, \
+        #         "number of microbatches should be increasing due to batch size rampup"
+        #     save_checkpoint_and_time(iteration, model, optimizer,
+        #                              opt_param_scheduler,
+        #                              num_floating_point_operations_so_far,
+        #                              checkpointing_context)
+        # num_microbatches = get_num_microbatches()
+        # update_num_microbatches(args.consumed_train_samples, consistency_check=True)
 
         args.curr_iteration = iteration
+        # * * * * * Checkpoint per iteration * * * * *
+        # TODO: Load configs from json file
+        ckpt_file_name = f"checkpoint_{iteration}"
+        if iteration % args.save_interval == 0:
+            print(f"[ITER {iteration}] | ===== start checkpoint =====")
+            pypipeec.checkpoint.start_checkpoint(ckpt_file_name, model, optimizer)
         loss_dict, skipped_iter, grad_norm, num_zeros_in_grad = \
             train_step(forward_step_func,
                        train_data_iterator,
@@ -1034,6 +1050,9 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
                        optimizer,
                        opt_param_scheduler,
                        config)
+        if (iteration + 1) % args.save_interval == 0:
+            pypipeec.checkpoint.wait()
+            print(f"[ITER {iteration}] | ===== finish checkpoint =====")
         iteration += 1
         batch_size = mpu.get_data_parallel_world_size() * \
                      args.micro_batch_size * \
@@ -1113,27 +1132,28 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
             timers('interval-time', log_level=0).start(barrier=True)
 
         # Checkpointing
+        # * * * * * Disable this for now * * * * *
         saved_checkpoint = False
         if args.exit_signal_handler:
             signal_handler = get_signal_handler()
             if any(signal_handler.signals_received()):
-                save_checkpoint_and_time(iteration, model, optimizer,
-                                         opt_param_scheduler,
-                                         num_floating_point_operations_so_far,
-                                         checkpointing_context)
+                # save_checkpoint_and_time(iteration, model, optimizer,
+                #                          opt_param_scheduler,
+                #                          num_floating_point_operations_so_far,
+                #                          checkpointing_context)
                 print_datetime('exiting program after receiving SIGTERM.')
                 exit = True
                 break
 
-        if args.save and args.save_interval and \
-           iteration % args.save_interval == 0:
-            timers('interval-time').stop()
-            save_checkpoint_and_time(iteration, model, optimizer,
-                                     opt_param_scheduler,
-                                     num_floating_point_operations_so_far,
-                                     checkpointing_context)
-            saved_checkpoint = True
-            timers('interval-time', log_level=0).start(barrier=True)
+        # if args.save and args.save_interval and \
+        #    iteration % args.save_interval == 0:
+        #     timers('interval-time').stop()
+        #     save_checkpoint_and_time(iteration, model, optimizer,
+        #                              opt_param_scheduler,
+        #                              num_floating_point_operations_so_far,
+        #                              checkpointing_context)
+        #     saved_checkpoint = True
+        #     timers('interval-time', log_level=0).start(barrier=True)
 
         # Exiting based on duration
         if args.exit_duration_in_mins:
@@ -1145,22 +1165,22 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
                 done_cuda, op=torch.distributed.ReduceOp.MAX)
             done = done_cuda.item()
             if done:
-                if not saved_checkpoint:
-                    save_checkpoint_and_time(iteration, model, optimizer,
-                                             opt_param_scheduler,
-                                             num_floating_point_operations_so_far,
-                                             checkpointing_context)
+                # if not saved_checkpoint:
+                #     save_checkpoint_and_time(iteration, model, optimizer,
+                #                              opt_param_scheduler,
+                #                              num_floating_point_operations_so_far,
+                #                              checkpointing_context)
                 print_datetime('exiting program after {} minutes'.format(train_time))
                 exit = True
                 break
 
         # Exiting based on iterations
         if args.exit_interval and iteration % args.exit_interval == 0:
-            if args.save and not saved_checkpoint:
-                save_checkpoint_and_time(iteration, model, optimizer,
-                                         opt_param_scheduler,
-                                         num_floating_point_operations_so_far,
-                                         checkpointing_context)
+            # if args.save and not saved_checkpoint:
+            #     save_checkpoint_and_time(iteration, model, optimizer,
+            #                              opt_param_scheduler,
+            #                              num_floating_point_operations_so_far,
+            #                              checkpointing_context)
             torch.distributed.barrier()
             print_datetime('exiting program at iteration {}'.format(iteration))
             exit = True
