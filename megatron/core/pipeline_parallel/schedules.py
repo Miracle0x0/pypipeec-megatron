@@ -20,6 +20,7 @@ import pypipeec
 # Types
 Shape = Union[List[int], torch.Size]
 
+DISABLE_LOG: bool = True
 DISABLE_SUSPEND: bool = False
 DISABLE_RESUME: bool = False
 
@@ -716,7 +717,8 @@ def forward_backward_pipelining_with_interleaving(
     parallel_state.set_virtual_pipeline_model_parallel_rank(0)
     # * * * * * Checkpointing * * * * *
     if not DISABLE_SUSPEND:
-        print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfer =====")
+        if not DISABLE_LOG:
+            print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfer =====")
         pypipeec.checkpoint.suspend_transfer()
     input_tensors[0].append(p2p_communication.recv_forward(tensor_shape, config))
 
@@ -742,10 +744,12 @@ def forward_backward_pipelining_with_interleaving(
         current_microbatch = get_microbatch_id_in_model_chunk(k, forward=True)
         # * * * * * Checkpointing * * * * *
         if not DISABLE_SUSPEND:
-            print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_snapshot =====")
+            if not DISABLE_LOG:
+                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_snapshot =====")
             pypipeec.checkpoint.suspend_snapshot()
         if not DISABLE_RESUME:
-            print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
+            if not DISABLE_LOG:
+                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
             pypipeec.checkpoint.resume_transfer()
         output_tensor = forward_step_helper(
             k, current_microbatch, checkpoint_activations_microbatch
@@ -768,7 +772,8 @@ def forward_backward_pipelining_with_interleaving(
         # in this iteration; receive tensors for next iteration).
         if not config.overlap_p2p_comm:
             if not DISABLE_SUSPEND:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfor =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfor =====")
                 pypipeec.checkpoint.suspend_transfer()
             if (
                 k == (num_warmup_microbatches - 1)
@@ -828,16 +833,19 @@ def forward_backward_pipelining_with_interleaving(
 
                 output_tensor_grads[num_model_chunks - 1].append(output_tensor_grad)
             input_tensors[next_forward_model_chunk_id].append(input_tensor)
-        print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
+        if not DISABLE_LOG:
+            print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
         pypipeec.checkpoint.resume_transfer()
-        print(f"[RANK {pipeline_parallel_rank}] | ===== resume_snapshot =====")
+        if not DISABLE_LOG:
+            print(f"[RANK {pipeline_parallel_rank}] | ===== resume_snapshot =====")
         pypipeec.checkpoint.resume_snapshot()
 
         deallocate_output_tensor(output_tensor, config.deallocate_pipeline_outputs)
 
         # TODO: check if this is correct
         if not DISABLE_SUSPEND:
-            print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfer =====")
+            if not DISABLE_LOG:
+                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfer =====")
             pypipeec.checkpoint.suspend_transfer()
 
     # Run 1F1B in steady state.
@@ -864,12 +872,15 @@ def forward_backward_pipelining_with_interleaving(
             deallocate_output_tensor(output_tensor, config.deallocate_pipeline_outputs)
 
             if not DISABLE_SUSPEND:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_snapshot =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_snapshot =====")
                 pypipeec.checkpoint.suspend_snapshot()
             if not DISABLE_RESUME:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
                 pypipeec.checkpoint.resume_transfer()
-            print(f"[RANK {pipeline_parallel_rank}] | ===== forward_step_helper =====")
+            if not DISABLE_LOG:
+                print(f"[RANK {pipeline_parallel_rank}] | ===== forward_step_helper =====")
             output_tensor = forward_step_helper(
                 forward_k, current_microbatch, checkpoint_activations_microbatch
             )
@@ -905,7 +916,8 @@ def forward_backward_pipelining_with_interleaving(
             # Send activation tensor to the next stage and receive activation tensor from the
             # previous stage
             if not DISABLE_SUSPEND:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfor =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfor =====")
                 pypipeec.checkpoint.suspend_transfer()
             input_tensor, fwd_wait_handles = p2p_communication.send_forward_recv_forward(
                 output_tensor,
@@ -916,10 +928,12 @@ def forward_backward_pipelining_with_interleaving(
             )
             # assert fwd_wait_handles is not None
             if not DISABLE_RESUME:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
                 pypipeec.checkpoint.resume_transfer()
             if not DISABLE_RESUME:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_snapshot =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_snapshot =====")
                 pypipeec.checkpoint.resume_snapshot()
 
             if bwd_wait_handles is not None:
@@ -929,12 +943,15 @@ def forward_backward_pipelining_with_interleaving(
             # Backward pass.
             backward_k = k
             if not DISABLE_SUSPEND:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_snapshot =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_snapshot =====")
                 pypipeec.checkpoint.suspend_snapshot()
             if not DISABLE_RESUME:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
                 pypipeec.checkpoint.resume_transfer()
-            print(f"[RANK {pipeline_parallel_rank}] | ===== backward_step_helper =====")
+            if not DISABLE_LOG:
+                print(f"[RANK {pipeline_parallel_rank}] | ===== backward_step_helper =====")
             input_tensor_grad = backward_step_helper(backward_k)
 
             backward_model_chunk_id = get_model_chunk_id(backward_k, forward=False)
@@ -958,7 +975,8 @@ def forward_backward_pipelining_with_interleaving(
                 next_backward_model_chunk_id = get_model_chunk_id(backward_k + 1, forward=False)
 
             if not DISABLE_SUSPEND:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfor =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfor =====")
                 pypipeec.checkpoint.suspend_transfer()
             output_tensor_grad, bwd_wait_handles = p2p_communication.send_backward_recv_backward(
                 input_tensor_grad,
@@ -968,26 +986,32 @@ def forward_backward_pipelining_with_interleaving(
                 overlap_p2p_comm=True,
             )
             if not DISABLE_RESUME:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
                 pypipeec.checkpoint.resume_transfer()
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_snapshot =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_snapshot =====")
                 pypipeec.checkpoint.resume_snapshot()
 
         else:  # no p2p overlap
             if not DISABLE_SUSPEND:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_snapshot =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_snapshot =====")
                 pypipeec.checkpoint.suspend_snapshot()
             if not DISABLE_RESUME:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
                 pypipeec.checkpoint.resume_transfer()
-            print(f"[RANK {pipeline_parallel_rank}] | ===== forward_step_helper =====")
+            if not DISABLE_LOG:
+                print(f"[RANK {pipeline_parallel_rank}] | ===== forward_step_helper =====")
             output_tensor = forward_step_helper(
                 forward_k, current_microbatch, checkpoint_activations_microbatch
             )
 
             # Backward pass.
             backward_k = k
-            print(f"[RANK {pipeline_parallel_rank}] | ===== backward_step_helper =====")
+            if not DISABLE_LOG:
+                print(f"[RANK {pipeline_parallel_rank}] | ===== backward_step_helper =====")
             input_tensor_grad = backward_step_helper(backward_k)
 
             # Send output_tensor and input_tensor_grad, receive input_tensor
@@ -1037,7 +1061,8 @@ def forward_backward_pipelining_with_interleaving(
                 recv_prev = False
 
             if not DISABLE_SUSPEND:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfor =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfor =====")
                 pypipeec.checkpoint.suspend_transfer()
             # Communicate tensors.
             (
@@ -1052,9 +1077,11 @@ def forward_backward_pipelining_with_interleaving(
                 config=config,
             )
             if not DISABLE_RESUME:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
                 pypipeec.checkpoint.resume_transfer()
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_snapshot =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_snapshot =====")
                 pypipeec.checkpoint.resume_snapshot()
             deallocate_output_tensor(output_tensor, config.deallocate_pipeline_outputs)
 
@@ -1075,20 +1102,25 @@ def forward_backward_pipelining_with_interleaving(
 
         if all_warmup_microbatches:
             if not DISABLE_SUSPEND:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfer =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfer =====")
                 pypipeec.checkpoint.suspend_transfer()
-            print(f"[RANK {pipeline_parallel_rank}] | ===== recv_backward =====")
+            if not DISABLE_LOG:
+                print(f"[RANK {pipeline_parallel_rank}] | ===== recv_backward =====")
             output_tensor_grads[num_model_chunks - 1].append(
                 p2p_communication.recv_backward(tensor_shape, config=config)
             )
         for k in range(num_microbatches_remaining, total_num_microbatches):
             if not DISABLE_SUSPEND:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_snapshot =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_snapshot =====")
                 pypipeec.checkpoint.suspend_snapshot()
             if not DISABLE_RESUME:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
                 pypipeec.checkpoint.resume_transfer()
-            print(f"[RANK {pipeline_parallel_rank}] | ===== backward_step_helper =====")
+            if not DISABLE_LOG:
+                print(f"[RANK {pipeline_parallel_rank}] | ===== backward_step_helper =====")
             input_tensor_grad = backward_step_helper(k)
             next_backward_model_chunk_id = get_model_chunk_id(k + 1, forward=False)
             recv_next = True
@@ -1098,18 +1130,22 @@ def forward_backward_pipelining_with_interleaving(
             if k == (total_num_microbatches - 1):
                 recv_next = False
             if not DISABLE_SUSPEND:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfor =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== suspend_transfor =====")
                 pypipeec.checkpoint.suspend_transfer()
-            print(f"[RANK {pipeline_parallel_rank}] | ===== send_backward_recv_backward =====")
+            if not DISABLE_LOG:
+                print(f"[RANK {pipeline_parallel_rank}] | ===== send_backward_recv_backward =====")
             output_tensor_grads[next_backward_model_chunk_id].append(
                 p2p_communication.send_backward_recv_backward(
                     input_tensor_grad, recv_next=recv_next, tensor_shape=tensor_shape, config=config
                 )
             )
             if not DISABLE_RESUME:
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_transfer =====")
                 pypipeec.checkpoint.resume_transfer()
-                print(f"[RANK {pipeline_parallel_rank}] | ===== resume_snapshot =====")
+                if not DISABLE_LOG:
+                    print(f"[RANK {pipeline_parallel_rank}] | ===== resume_snapshot =====")
                 pypipeec.checkpoint.resume_snapshot()
 
         # Launch any remaining grad reductions.

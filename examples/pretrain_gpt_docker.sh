@@ -4,7 +4,7 @@
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-GPUS_PER_NODE=2
+GPUS_PER_NODE=4
 # Change for multinode config
 MASTER_ADDR=localhost
 MASTER_PORT=29600
@@ -27,14 +27,14 @@ DISTRIBUTED_ARGS="
 
 GPT_ARGS="
     --tensor-model-parallel-size 1 \
-    --pipeline-model-parallel-size 2 \
+    --pipeline-model-parallel-size 4 \
     --num-layers 12 \
     --hidden-size 1024 \
     --num-attention-heads 16 \
     --seq-length 1024 \
     --max-position-embeddings 1024 \
     --micro-batch-size 4 \
-    --global-batch-size 8 \
+    --global-batch-size 16 \
     --lr 0.00015 \
     --train-iters 100 \
     --lr-decay-iters 320000 \
@@ -43,7 +43,8 @@ GPT_ARGS="
     --weight-decay 1e-2 \
     --lr-warmup-fraction .01 \
     --clip-grad 1.0 \
-    --attention-softmax-in-fp32
+    --attention-softmax-in-fp32 \
+    --num-layers-per-virtual-pipeline-stage 3
 "
 
 DATA_ARGS="
@@ -55,7 +56,7 @@ DATA_ARGS="
 
 OUTPUT_ARGS="
     --log-interval 1 \
-    --save-interval 4 \
+    --save-interval 8 \
     --eval-interval 1000 \
     --eval-iters 1000
 "

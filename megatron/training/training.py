@@ -61,6 +61,8 @@ from .global_vars import (
 import pypipeec
 import pypipeec.checkpoint
 
+DISABLE_LOG: bool = True
+
 stimer = StragglerDetector()
 
 def print_datetime(string):
@@ -240,7 +242,7 @@ def pretrain(train_valid_test_dataset_provider,
     ckpt_file_name = os.path.join(args.save, f"checkpoint_{args.rank}")
     pypipeec.checkpoint.save_cuda(ckpt_file_name, model[0], optimizer)
     # TODO: Use config from args
-    network_config = pypipeec.config.NetworkConfig(2, args.rank, 1, ['0.0.0.0:11431', '0.0.0.0:11432'])
+    network_config = pypipeec.config.NetworkConfig(4, args.rank, 1, ['0.0.0.0:11431', '0.0.0.0:11432', '0.0.0.0:11433', '0.0.0.0:11434'])
     pypipeec.checkpoint.init(ckpt_file_name, network_config)
 
     # Data stuff.
@@ -1043,7 +1045,8 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
         # TODO: Load configs from json file
         ckpt_file_name = os.path.join(args.save, f"checkpoint_{args.rank}")
         if iteration % args.save_interval == 0:
-            print(f"[ITER {iteration}] | ===== start checkpoint =====")
+            if not DISABLE_LOG:
+                print(f"[ITER {iteration}] | ===== start checkpoint =====")
             pypipeec.checkpoint.start_checkpoint(ckpt_file_name, model[0], optimizer)
         loss_dict, skipped_iter, grad_norm, num_zeros_in_grad = \
             train_step(forward_step_func,
@@ -1053,9 +1056,11 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
                        opt_param_scheduler,
                        config)
         if (iteration + 1) % args.save_interval == 0:
-            print(f"[ITER {iteration}] | ===== pypipeec wait =====")
+            if not DISABLE_LOG:
+                print(f"[ITER {iteration}] | ===== pypipeec wait =====")
             pypipeec.checkpoint.wait()
-            print(f"[ITER {iteration}] | ===== finish checkpoint =====")
+            if not DISABLE_LOG:
+                print(f"[ITER {iteration}] | ===== finish checkpoint =====")
         iteration += 1
         batch_size = mpu.get_data_parallel_world_size() * \
                      args.micro_batch_size * \
