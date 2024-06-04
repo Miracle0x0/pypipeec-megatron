@@ -17,6 +17,8 @@ from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.utils import make_tp_sharded_tensor_for_checkpoint
+from megatron.training.utils import unwrap_model
+from megatron.training.checkpointing import generate_state_dict
 
 
 class GPTModel(LanguageModule):
@@ -237,3 +239,7 @@ class GPTModel(LanguageModule):
         ), f'Expected output layer extra state to be empty, got: {output_extra_state}'
 
         return sharded_state_dict
+
+    def state_dict(self):
+        unwarpped_model = unwrap_model(self)[0]
+        return generate_state_dict(unwarpped_model)

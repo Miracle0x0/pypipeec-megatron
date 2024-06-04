@@ -22,6 +22,7 @@ from megatron.core import mpu, tensor_parallel
 from megatron.core.utils import check_param_hashes_across_dp_replicas, get_model_config, StragglerDetector
 from megatron.training.checkpointing import load_checkpoint
 from megatron.training.checkpointing import save_checkpoint
+from megatron.training.checkpointing import generate_state_dict
 from megatron.legacy.model import Float16Module
 from megatron.core.distributed import DistributedDataParallelConfig
 from megatron.core.distributed import DistributedDataParallel as DDP
@@ -236,8 +237,9 @@ def pretrain(train_valid_test_dataset_provider,
 
     # * * * Checkpointing setup * * *
     # TODO: Load config from json file
-    ckpt_file_name = f"checkpoint_{args.rank}"
-    pypipeec.checkpoint.save_cuda(ckpt_file_name, model, optimizer)
+    ckpt_file_name = os.path.join(args.save, f"checkpoint_{args.rank}")
+    pypipeec.checkpoint.save_cuda(ckpt_file_name, model[0], optimizer)
+    # TODO: Use config from args
     network_config = pypipeec.config.NetworkConfig(2, args.rank, 1, ['0.0.0.0:11431', '0.0.0.0:11432'])
     pypipeec.checkpoint.init(ckpt_file_name, network_config)
 
@@ -288,9 +290,9 @@ def pretrain(train_valid_test_dataset_provider,
 
         print_datetime('after training is done')
 
-        if args.save and iteration != 0 and iteration % args.save_interval != 0:
-            save_checkpoint(iteration, model, optimizer, opt_param_scheduler,
-                            num_floating_point_operations_so_far, checkpointing_context)
+        # if args.save and iteration != 0 and iteration % args.save_interval != 0:
+        #     save_checkpoint(iteration, model, optimizer, opt_param_scheduler,
+        #                     num_floating_point_operations_so_far, checkpointing_context)
     else:
         print_rank_0('skipping training (--skip-train is on) ...')
 
@@ -1025,24 +1027,24 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
         # from the previous iteration, save a checkpoint. Then run consistency check
         # to make sure training configuration is still valid.
         # * * * * * Disable this for now * * * * *
-        # update_num_microbatches(args.consumed_train_samples, consistency_check=False)
-        # if get_num_microbatches() != num_microbatches and iteration != 0:
-        #     assert get_num_microbatches() > num_microbatches, \
-        #         "number of microbatches should be increasing due to batch size rampup"
+        update_num_microbatches(args.consumed_train_samples, consistency_check=False)
+        if get_num_microbatches() != num_microbatches and iteration != 0:
+            assert get_num_microbatches() > num_microbatches, \
+                "number of microbatches should be increasing due to batch size rampup"
         #     save_checkpoint_and_time(iteration, model, optimizer,
         #                              opt_param_scheduler,
         #                              num_floating_point_operations_so_far,
         #                              checkpointing_context)
-        # num_microbatches = get_num_microbatches()
-        # update_num_microbatches(args.consumed_train_samples, consistency_check=True)
+        num_microbatches = get_num_microbatches()
+        update_num_microbatches(args.consumed_train_samples, consistency_check=True)
 
         args.curr_iteration = iteration
         # * * * * * Checkpoint per iteration * * * * *
         # TODO: Load configs from json file
-        ckpt_file_name = f"checkpoint_{iteration}"
+        ckpt_file_name = os.path.join(args.save, f"checkpoint_{args.rank}")
         if iteration % args.save_interval == 0:
             print(f"[ITER {iteration}] | ===== start checkpoint =====")
-            pypipeec.checkpoint.start_checkpoint(ckpt_file_name, model, optimizer)
+            pypipeec.checkpoint.start_checkpoint(ckpt_file_name, model[0], optimizer)
         loss_dict, skipped_iter, grad_norm, num_zeros_in_grad = \
             train_step(forward_step_func,
                        train_data_iterator,
@@ -1051,6 +1053,7 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
                        opt_param_scheduler,
                        config)
         if (iteration + 1) % args.save_interval == 0:
+            print(f"[ITER {iteration}] | ===== pypipeec wait =====")
             pypipeec.checkpoint.wait()
             print(f"[ITER {iteration}] | ===== finish checkpoint =====")
         iteration += 1
