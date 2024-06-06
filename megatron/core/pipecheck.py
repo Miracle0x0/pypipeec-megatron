@@ -25,7 +25,9 @@ def pipecheck_resume_transfer(rank: int):
     if not DISABLE_RESUME:
         ckpt.resume_transfer()
 
-def pipecheck_resume_snapshot():
+def pipecheck_resume_snapshot(rank: int):
     r"""PipeCheck resume snapshot function."""
+    if not DISABLE_LOG and not DISABLE_RESUME:
+        print(f"[RANK {rank}] | ===== resume_snapshot =====")
     if not DISABLE_RESUME:
         ckpt.resume_snapshot()
