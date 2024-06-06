@@ -61,6 +61,12 @@ from .global_vars import (
 import pypipeec
 import pypipeec.checkpoint
 
+# ! PipeCheck configs
+# TODO: Use os.environ
+# pypipeec.compress.enabled = True
+# pypipeec.compress._COMPRESS_CHUNK_SIZE = 16 * 1024 * 1024
+# pypipeec.compress._COMPRESS_TOLERANCE = 0.0001
+
 DISABLE_LOG: bool = True
 
 stimer = StragglerDetector()
