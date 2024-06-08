@@ -12,7 +12,7 @@ NNODES=1
 NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
-CHECKPOINT_PATH=/data/GPT2/checkpoints
+CHECKPOINT_PATH=/docker/data/GPT2/checkpoints
 VOCAB_FILE=/data/GPT2/gpt2-vocab.json
 MERGE_FILE=/data/GPT2/gpt2-merges.txt
 DATA_PATH=/data/GPT2/datasets/meg-gpt2_text_document
