@@ -787,6 +787,7 @@ def forward_backward_pipelining_with_interleaving(
                 )
             input_tensors[next_forward_model_chunk_id].append(input_tensor)
         else:
+            pipecheck_suspend_transfer(rank=pipeline_parallel_rank)
             input_tensor, fwd_wait_handles = p2p_communication.send_forward_recv_forward(
                 output_tensor,
                 recv_prev=recv_prev,
