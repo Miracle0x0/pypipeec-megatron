@@ -248,7 +248,13 @@ def pretrain(train_valid_test_dataset_provider,
     ckpt_file_name = os.path.join(args.save, f"checkpoint_{args.rank}")
     pypipeec.checkpoint.save_cuda(ckpt_file_name, model[0], optimizer)
     # TODO: Use config from args
-    network_config = pypipeec.config.NetworkConfig(4, args.rank, 1, ['0.0.0.0:11431', '0.0.0.0:11432', '0.0.0.0:11433', '0.0.0.0:11434'])
+    # ? Single node config
+    # network_config = pypipeec.config.NetworkConfig(4, args.rank, 1, ['0.0.0.0:11431', '0.0.0.0:11432', '0.0.0.0:11433', '0.0.0.0:11434'])
+    # ? Multi node config
+    ip_list_0 = [f"192.168.123.101:{11320 + i}" for i in range(4)]
+    ip_list_1 = [f"192.168.123.103:{11320 + i}" for i in range(4)]
+    network_config = pypipeec.config.NetworkConfig(4 * 2, args.rank, 1, ip_list_0 + ip_list_1)
+
     pypipeec.checkpoint.init(ckpt_file_name, network_config)
 
     # Data stuff.
